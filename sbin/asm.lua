@@ -2,7 +2,10 @@
 -- Copyright (c) 2026 Pancakse
 -- SPDX-License-Identifier: BSD-3-Clause
 -- Package manager for AetherOS.
--- usage: asm install <user/repo>[@branch]
+-- usage: asm install <package|user/repo>[@branch]
+--        asm search <query>
+--        asm repo add <user/repo>
+--        asm repo list
 --        asm remove <package>
 --        asm update
 --        asm upgrade [package]
@@ -21,22 +24,26 @@ local function printUsage()
     print("AetherOS package manager")
     print("")
     print("usage:")
-    print("  asm install <user/repo>[@branch]   install a package (+ dependencies)")
+    print("  asm install <name|user/repo>[@branch]  install a package (+ dependencies)")
+    print("  asm search <query>                 search the registries")
+    print("  asm repo add <user/repo>           add a registry")
+    print("  asm repo list                      list registries")
     print("  asm remove <package>               remove an installed package")
     print("  asm update                         check all installed packages for updates")
     print("  asm upgrade [package]               upgrade one package, or all of them")
     print("  asm list                           list installed packages")
     print("  asm info <package>                 show details about an installed package")
     print("")
-    print("Packages are plain GitHub repos - 'asm install afonya2/hello-world'")
-    print("fetches manifest.json + files straight from the repo. Only install")
+    print("'asm install hello-world' looks the name up in the registries;")
+    print("'asm install user/repo' fetches manifest.json + files straight from")
+    print("a GitHub repo. Only install")
     print("packages you trust; asm runs whatever code they contain, same as")
     print("apt/pip/npm would.")
 end
 
 if sub == "install" then
     if not args[2] then
-        print("usage: asm install <user/repo>[@branch]")
+        print("usage: asm install <name|user/repo>[@branch]")
         return
     end
     local ok, result = asmLib.installPackage(args[2], log)
@@ -66,7 +73,28 @@ elseif sub == "remove" then
     print(result)
     term.setTextColor(colors.white)
 
+elseif sub == "search" then
+    local results = asmLib.search(args[2])
+    if #results == 0 then print("No matches.") return end
+    for _, r in ipairs(results) do
+        term.setTextColor(colors.lightBlue)
+        write(r.name)
+        term.setTextColor(colors.white)
+        print("  " .. r.repo .. (r.description ~= "" and ("  - " .. r.description) or ""))
+    end
+
+elseif sub == "repo" then
+    if args[2] == "add" and args[3] then
+        local ok, err = asmLib.addRegistry(args[3])
+        print(ok and ("Added " .. args[3]) or ("asm: " .. tostring(err)))
+    elseif args[2] == "list" then
+        for _, r in ipairs(asmLib.loadRegistries()) do print(r) end
+    else
+        print("usage: asm repo add <user/repo> | asm repo list")
+    end
+
 elseif sub == "update" then
+    asmLib.refreshAllIndexes(log)
     local ok, cache = asmLib.checkUpdates(log)
     print("")
     local count = 0

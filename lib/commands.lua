@@ -22,6 +22,7 @@ return {
     { name = "date", usage = "date", desc = "Show the current in-game date and time." },
     { name = "whoami", usage = "whoami", desc = "Print the current username." },
     { name = "neofetch", usage = "neofetch", desc = "Show a system information summary." },
+    { name = "hyfetch", usage = "hyfetch", desc = "Show a colorful system information summary." },
     { name = "uname", usage = "uname", desc = "Print AetherOS system information." },
     { name = "history", usage = "history", desc = "Show recent shell command history." },
     { name = "peripherals", usage = "peripherals", desc = "List all attached peripherals." },

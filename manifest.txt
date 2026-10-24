@@ -46,6 +46,7 @@ bin/whoami.lua
 bin/uname.lua
 bin/df.lua
 bin/neofetch.lua
+bin/hyfetch.lua
 bin/peripherals.lua
 bin/gui.lua
 bin/files.lua

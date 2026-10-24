@@ -6,6 +6,9 @@
 -- from the repo root, then every file it lists, from
 -- raw.githubusercontent.com. No central registry - the repo IS the
 -- package.
+-- Short names: `asm install hello-world` (no slash) is looked up in the
+-- registries - separate GitHub repos holding a packages.json that maps
+-- names to user/repo. See asm.loadRegistries / asm.resolveName.
 -- Manifest format (manifest.json, JSON, at the repo root):
 -- {
 --   "name": "hello-world",
@@ -33,6 +36,12 @@ local PACKAGES_DIR = "/packages"
 local DB_DIR = "/etc/asm"
 local DB_PATH = DB_DIR .. "/installed.json"
 local CACHE_PATH = DB_DIR .. "/update-cache.json"
+local REGISTRIES_PATH = DB_DIR .. "/repos.json"   -- extra registries: ["user/repo", ...]
+local INDEX_DIR = DB_DIR .. "/index"              -- cached packages.json per registry
+
+-- Built-in registries (GitHub repos with a packages.json at the root).
+-- Checked in order; the first one that has the name wins.
+local DEFAULT_REGISTRIES = { "PancakeInc/asm-repo" }
 
 local function ensureDbDir()
     if not fs.exists(DB_DIR) then fs.makeDir(DB_DIR) end
@@ -93,6 +102,123 @@ local function fetchRaw(user, repo, branch, path)
     local content = response.readAll()
     response.close()
     return true, content
+end
+
+-- ---------------------------------------------------------------------
+-- Registries
+-- A registry is a GitHub repo with a packages.json at its root:
+-- {
+--   "packages": {
+--     "hello-world": { "repo": "someuser/hello-world", "branch": "main",
+--                      "description": "optional" }
+--   }
+-- }
+-- ---------------------------------------------------------------------
+
+function asm.loadRegistries()
+    local list = {}
+    for _, r in ipairs(DEFAULT_REGISTRIES) do table.insert(list, r) end
+    for _, r in ipairs(readJson(REGISTRIES_PATH, {})) do
+        if type(r) == "string" then table.insert(list, r) end
+    end
+    return list
+end
+
+function asm.addRegistry(registry)
+    if not registry:match("^[%w_%-%.]+/[%w_%-%.]+$") then
+        return false, "'" .. registry .. "' doesn't look like user/repo"
+    end
+    local extra = readJson(REGISTRIES_PATH, {})
+    for _, r in ipairs(extra) do
+        if r == registry then return false, "already added" end
+    end
+    table.insert(extra, registry)
+    writeJson(REGISTRIES_PATH, extra)
+    return true
+end
+
+local function indexPath(registry)
+    return INDEX_DIR .. "/" .. (registry:gsub("/", "_")) .. ".json"
+end
+
+-- Downloads a registry's packages.json (main, then master) and caches
+-- it. Returns ok, indexTable|err
+function asm.refreshIndex(registry)
+    local user, repo = registry:match("^([^/]+)/([^/]+)$")
+    if not user then return false, "bad registry: " .. registry end
+
+    local ok, content
+    for _, branch in ipairs({ "main", "master" }) do
+        ok, content = fetchRaw(user, repo, branch, "packages.json")
+        if ok then break end
+    end
+    if not ok then return false, "couldn't fetch packages.json from " .. registry end
+
+    local decOk, data = pcall(json.decode, content)
+    if not decOk or type(data) ~= "table" or type(data.packages) ~= "table" then
+        return false, registry .. " has an invalid packages.json"
+    end
+
+    ensureDbDir()
+    if not fs.exists(INDEX_DIR) then fs.makeDir(INDEX_DIR) end
+    local file = fs.open(indexPath(registry), "w")
+    if file then file.write(content) file.close() end
+    return true, data
+end
+
+function asm.refreshAllIndexes(log)
+    log = log or function() end
+    for _, registry in ipairs(asm.loadRegistries()) do
+        log("Syncing registry " .. registry .. "...")
+        local ok, err = asm.refreshIndex(registry)
+        if not ok then log("  warning: " .. tostring(err)) end
+    end
+end
+
+-- Cached index first; if the name isn't in it (or there's no cache yet),
+-- refresh once and look again.
+local function lookup(registry, name)
+    local index = readJson(indexPath(registry), nil)
+    if index and index.packages and index.packages[name] then
+        return index.packages[name]
+    end
+    local ok, data = asm.refreshIndex(registry)
+    if ok then return data.packages[name] end
+    return nil
+end
+
+-- "hello-world" -> "someuser/hello-world[@branch]", registry
+function asm.resolveName(name)
+    for _, registry in ipairs(asm.loadRegistries()) do
+        local entry = lookup(registry, name)
+        if entry and entry.repo then
+            local spec = entry.repo
+            if entry.branch then spec = spec .. "@" .. entry.branch end
+            return spec, registry
+        end
+    end
+    return nil
+end
+
+-- Substring search over cached indexes. Returns { {name=, repo=, description=, registry=}, ... }
+function asm.search(query)
+    query = (query or ""):lower()
+    local results = {}
+    for _, registry in ipairs(asm.loadRegistries()) do
+        local index = readJson(indexPath(registry), nil)
+        if not index then
+            local ok, data = asm.refreshIndex(registry)
+            index = ok and data or nil
+        end
+        for name, entry in pairs(index and index.packages or {}) do
+            local desc = entry.description or ""
+            if name:lower():find(query, 1, true) or desc:lower():find(query, 1, true) then
+                table.insert(results, { name = name, repo = entry.repo, description = desc, registry = registry })
+            end
+        end
+    end
+    table.sort(results, function(a, b) return a.name < b.name end)
+    return results
 end
 
 -- Fetches manifest.json, trying 'main' then 'master' if no branch was
@@ -181,6 +307,16 @@ function asm.installPackage(pkgArg, log, seen)
     log = log or function() end
     seen = seen or {}
 
+    -- No slash = short name; look it up in the registries.
+    if not pkgArg:find("/", 1, true) then
+        local spec, registry = asm.resolveName(pkgArg)
+        if not spec then
+            return false, "no package named '" .. pkgArg .. "' in any registry (or use user/repo)"
+        end
+        log("Resolved " .. pkgArg .. " -> " .. spec .. " (via " .. registry .. ")")
+        pkgArg = spec
+    end
+
     local user, repo, branch = asm.parsePackageArg(pkgArg)
     if not user or not repo then
         return false, "'" .. pkgArg .. "' doesn't look like user/repo"
@@ -256,7 +392,7 @@ function asm.removePackage(name, log)
     for otherName, otherEntry in pairs(db) do
         if otherName ~= name then
             for _, dep in ipairs(otherEntry.dependencies or {}) do
-                if dep == entry.repo then table.insert(dependents, otherName) end
+                if dep == entry.repo or dep == name then table.insert(dependents, otherName) end
             end
         end
     end
