@@ -2,13 +2,13 @@
 -- Copyright (c) 2026 Pancakse
 -- SPDX-License-Identifier: BSD-3-Clause
 -- Downloads and installs AetherOS onto this computer from a GitHub repo.
--- Run with: wget run https://raw.githubusercontent.com/ItzPancakse/AetherOS/main/netinstall.lua
+-- Run with: wget run https://raw.githubusercontent.com/PancakeInc/AetherOS/main/netinstall.lua
 -- If you forked/renamed the repo, update BASE_URL below.
 
 term.clear()
 term.setCursorPos(1,1)
 
-local BASE_URL = "https://raw.githubusercontent.com/ItzPancakse/AetherOS/main/"
+local BASE_URL = "https://raw.githubusercontent.com/PancakeInc/AetherOS/main/"
 
 local function get_remote_version()
     if http then

@@ -5,7 +5,7 @@
 -- source repo. Offers a targeted repair (only missing/empty files) or a
 -- full reinstall (everything, overwriting local changes).
 
-local BASE_URL = "https://raw.githubusercontent.com/ItzPancakse/AetherOS/main/"
+local BASE_URL = "https://raw.githubusercontent.com/PancakeInc/AetherOS/main/"
 
 if not http then
     term.setTextColor(colors.red)

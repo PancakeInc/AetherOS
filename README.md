@@ -9,7 +9,7 @@ logo from https://opengameart.org/content/cloud
 ## How to install!
 On your computer in CC: Tweaked run
 ```shell
-wget run https://raw.githubusercontent.com/ItzPancakse/AetherOS/main/netinstall.lua
+wget run https://raw.githubusercontent.com/PancakeInc/AetherOS/main/netinstall.lua
 ```
 Hope that helps!
 

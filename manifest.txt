@@ -13,7 +13,6 @@ lib/theme.lua
 lib/ui.lua
 lib/wm.lua
 lib/desktop.lua
-lib/create.lua
 lib/commands.lua
 lib/update.lua
 lib/crypto.lua
@@ -48,8 +47,6 @@ bin/uname.lua
 bin/df.lua
 bin/neofetch.lua
 bin/peripherals.lua
-bin/createctl.lua
-bin/createui.lua
 bin/gui.lua
 bin/files.lua
 bin/settings.lua
@@ -72,7 +69,6 @@ sbin/asm.lua
 apps/files.lua
 apps/settings.lua
 apps/taskmgr.lua
-apps/createctl.lua
 apps/docs.lua
 apps/sheets.lua
 recovery.lua

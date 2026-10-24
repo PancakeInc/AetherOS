@@ -5,7 +5,7 @@
 -- the latest files. Shared by /update.lua and the optional boot-time
 -- update check.
 
-local BASE_URL = "https://raw.githubusercontent.com/ItzPancakse/AetherOS/main/"
+local BASE_URL = "https://raw.githubusercontent.com/PancakeInc/AetherOS/main/"
 local VERSION_FILE = "version.txt"
 
 local update = {}
