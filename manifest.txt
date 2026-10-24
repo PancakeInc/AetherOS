@@ -48,6 +48,7 @@ bin/df.lua
 bin/neofetch.lua
 bin/hyfetch.lua
 bin/peripherals.lua
+bin/wm.lua
 bin/gui.lua
 bin/files.lua
 bin/settings.lua
@@ -60,6 +61,7 @@ bin/recovery.lua
 bin/sudo.lua
 bin/su.lua
 bin/users.lua
+bin/craftos.lua
 bin/passwd.lua
 bin/update.lua
 sbin/reboot.lua

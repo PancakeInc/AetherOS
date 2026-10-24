@@ -26,6 +26,7 @@ wm.screenW, wm.screenH = term.getSize()
 wm.realTerm = term.current()
 wm.focusedId = nil
 wm.dragging = nil   -- { id, offsetX, offsetY }
+wm.topMargin = 0    -- rows reserved at the top of the screen (menu bar)
 wm.bottomMargin = 0 -- rows reserved at the bottom of the screen (taskbar)
 
 local MIN_W, MIN_H = 20, 6
@@ -39,8 +40,16 @@ local function ensureVersionModule()
     end
 end
 
-local function usableH()
+local function usableTop()
+    return 1 + wm.topMargin
+end
+
+local function usableBottom()
     return wm.screenH - wm.bottomMargin
+end
+
+local function usableH()
+    return math.max(1, usableBottom() - usableTop() + 1)
 end
 
 local function findIndex(id)
@@ -71,8 +80,7 @@ end
 
 local function clampWindowPos(win)
     win.x = math.max(1, math.min(win.x, wm.screenW - 4))
-    win.y = math.max(1, math.min(win.y, usableH() - win.h + 1))
-    win.y = math.max(1, win.y)
+    win.y = math.max(usableTop(), math.min(win.y, usableBottom() - win.h + 1))
 end
 
 local function repositionWindow(win)
@@ -92,14 +100,23 @@ local function drawChrome(win)
     win.outer.clearLine()
 
     local title = win.title
-    if #title > win.w - 4 then title = title:sub(1, win.w - 4) end
-    win.outer.setCursorPos(2, 1)
+    if #title > win.w - 10 then title = title:sub(1, win.w - 10) end
+    win.outer.setCursorPos(6, 1)
     win.outer.write(title)
 
-    win.outer.setCursorPos(win.w, 1)
+    -- mac-style traffic lights: close, minimize, zoom
+    win.outer.setCursorPos(2, 1)
     win.outer.setBackgroundColor(colors.red)
-    win.outer.setTextColor(colors.white)
-    win.outer.write("x")
+    win.outer.write(" ")
+    win.outer.setCursorPos(3, 1)
+    win.outer.setBackgroundColor(colors.yellow)
+    win.outer.write(" ")
+    win.outer.setCursorPos(4, 1)
+    win.outer.setBackgroundColor(colors.lime)
+    win.outer.write(" ")
+
+    win.outer.setBackgroundColor(bg)
+    win.outer.setTextColor(fg)
 end
 
 -- Full redraw/composite pass: bottom to top, content then chrome.
@@ -118,7 +135,7 @@ function wm.spawnWindow(program, args, opts)
     local w = math.max(MIN_W, opts.w or 34)
     local h = math.max(MIN_H, math.min(opts.h or 14, usableH() - 1))
     local x = opts.x or math.max(2, math.floor((wm.screenW - w) / 2) + (#wm.windows % 4) * 2)
-    local y = opts.y or math.max(2, math.floor((usableH() - h) / 2) + (#wm.windows % 4) * 1)
+    local y = opts.y or math.max(usableTop() + 1, usableTop() + math.floor((usableH() - h) / 2) + (#wm.windows % 4) * 1)
 
     local id = wm.nextId
     wm.nextId = wm.nextId + 1
@@ -197,6 +214,12 @@ function wm.closeWindow(id)
     end
 end
 
+function wm.reflow()
+    for _, win in ipairs(wm.windows) do
+        repositionWindow(win)
+    end
+end
+
 -- Removes dead windows (programs that exited on their own).
 function wm.reapDead()
     local dead = {}
@@ -227,8 +250,27 @@ function wm.handleEvent(event)
 
                 if my == win.y then
                     -- titlebar
-                    if mx == win.x + win.w - 1 then
+                    if mx == win.x + 1 then
                         wm.closeWindow(win.id)
+                    elseif mx == win.x + 2 then
+                        -- minimize button placeholder (visual for now)
+                        return true
+                    elseif mx == win.x + 3 then
+                        if win.maximized then
+                            if win.prevGeom then
+                                win.x, win.y, win.w, win.h = win.prevGeom.x, win.prevGeom.y, win.prevGeom.w, win.prevGeom.h
+                            end
+                            win.maximized = false
+                        else
+                            win.prevGeom = { x = win.x, y = win.y, w = win.w, h = win.h }
+                            win.x = 1
+                            win.y = usableTop()
+                            win.w = wm.screenW
+                            win.h = usableH()
+                            win.content.reposition(1, 2, win.w, win.h - 1, win.outer)
+                            win.maximized = true
+                        end
+                        repositionWindow(win)
                     else
                         wm.dragging = { id = win.id, offsetX = mx - win.x, offsetY = my - win.y }
                     end

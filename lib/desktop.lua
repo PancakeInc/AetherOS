@@ -15,131 +15,152 @@ aether = aether or {}
 aether.wm = wm
 
 theme.refresh()
-wm.bottomMargin = 1
+wm.topMargin = 1
+wm.bottomMargin = 2
 
 local screenW, screenH = term.getSize()
-local taskbarY = screenH
+local menuBarY = 1
+local dockY = screenH
 
 local icons = {
     { label = "Terminal", program = "/bin/shell.lua", glyph = ">_", w = 42, h = 16 },
     { label = "Files", program = "/apps/files.lua", glyph = "[]", w = 40, h = 16 },
+    { label = "Docs", program = "/apps/docs.lua", glyph = "D", w = 44, h = 16 },
+    { label = "Sheets", program = "/apps/sheets.lua", glyph = "S", w = 48, h = 17 },
     { label = "Settings", program = "/apps/settings.lua", glyph = "*", w = 36, h = 14 },
-    { label = "Create Ctl", program = "/apps/createctl.lua", glyph = "~", w = 46, h = 17 },
-    { label = "Task Mgr", program = "/apps/taskmgr.lua", glyph = "#", w = 40, h = 14 },
-    { label = "Text Edit", program = "/edit.lua", glyph = "Ab", w = 40, h = 16 },
+    { label = "TaskMgr", program = "/apps/taskmgr.lua", glyph = "#", w = 40, h = 14 },
+    { label = "Edit", program = "/bin/edit.lua", glyph = "Ab", w = 40, h = 16 },
 }
 
-local startMenuOpen = false
-
-local function iconHitboxes()
-    local boxes = {}
-    local y = 2
-    for i, icon in ipairs(icons) do
-        table.insert(boxes, { x1 = 2, y1 = y, x2 = 2 + 10, y2 = y + 1, icon = icon })
-        y = y + 4
-    end
-    return boxes
-end
+local appleMenuOpen = false
+local appleMenuBoxes = {}
+local dockBoxes = {}
 
 local function drawWallpaper()
     term.setBackgroundColor(theme.desktopBg)
     term.clear()
-    -- subtle dotted pattern
-    term.setTextColor(theme.panelBg)
-    for y = 1, screenH - 1 do
+    -- subtle striped field to mimic a polished desktop texture
+    for y = 2, screenH - 2 do
+        local rowBg = (y % 2 == 0) and theme.desktopBg or theme.desktopBg2
+        term.setBackgroundColor(rowBg)
+        term.setCursorPos(1, y)
+        term.clearLine()
+    end
+
+    term.setTextColor(theme.textDim)
+    for y = 3, screenH - 3, 2 do
         for x = 1, screenW do
-            if (x + y) % 6 == 0 then
+            if (x + y) % 12 == 0 then
                 term.setCursorPos(x, y)
-                term.write(".")
+                term.write("*")
             end
         end
     end
 end
 
-local function drawIcons()
-    local y = 2
-    for _, icon in ipairs(icons) do
-        term.setBackgroundColor(theme.desktopBg)
-        term.setTextColor(theme.text)
-        term.setCursorPos(3, y)
-        term.write(icon.glyph)
-        term.setCursorPos(2, y + 1)
-        term.write(icon.label)
-        y = y + 4
-    end
-end
-
-local function windowButtons()
-    local boxes = {}
-    local x = 14
-    for _, win in ipairs(wm.windows) do
-        local label = " " .. win.title:sub(1, 10) .. " "
-        local w = #label
-        if x + w < screenW - 10 then
-            table.insert(boxes, { x1 = x, y1 = taskbarY, x2 = x + w - 1, y2 = taskbarY, win = win, label = label })
-            x = x + w + 1
-        end
-    end
-    return boxes
-end
-
-local function drawTaskbar()
-    term.setCursorPos(1, taskbarY)
-    term.setBackgroundColor(theme.taskbarBg)
-    term.setTextColor(theme.text)
+local function drawMenuBar()
+    term.setCursorPos(1, menuBarY)
+    term.setBackgroundColor(theme.menubarBg)
+    term.setTextColor(theme.menubarText)
     term.clearLine()
 
-    term.setCursorPos(1, taskbarY)
-    term.setBackgroundColor(startMenuOpen and theme.accent or theme.taskbarBg)
-    term.setTextColor(startMenuOpen and colors.black or theme.accent)
-    term.write(" AetherOS ")
+    term.setCursorPos(1, menuBarY)
+    term.setBackgroundColor(appleMenuOpen and theme.accent or theme.menubarBg)
+    term.setTextColor(appleMenuOpen and colors.black or theme.menubarText)
+    term.write(" Aether ")
 
-    for _, b in ipairs(windowButtons()) do
-        local active = (b.win.id == wm.focusedId)
-        term.setCursorPos(b.x1, taskbarY)
-        term.setBackgroundColor(active and theme.accent or theme.taskbarBg)
-        term.setTextColor(active and colors.black or theme.text)
-        term.write(b.label)
-    end
+    local focused = wm.focused()
+    local appLabel = focused and focused.title or "Desktop"
+    term.setCursorPos(10, menuBarY)
+    term.setBackgroundColor(theme.menubarBg)
+    term.setTextColor(theme.textDim)
+    term.write(appLabel:sub(1, math.max(0, screenW - 24)))
 
     local clock = textutils.formatTime(os.time(), true)
-    term.setCursorPos(screenW - #clock, taskbarY)
-    term.setBackgroundColor(theme.taskbarBg)
-    term.setTextColor(theme.textDim)
+    term.setCursorPos(screenW - #clock + 1, menuBarY)
+    term.setTextColor(theme.menubarText)
     term.write(clock)
 end
 
-local startMenuBoxes = {}
+local function drawDock()
+    local dockBg = theme.dockBg
 
-local function drawStartMenu()
-    if not startMenuOpen then return end
-    local w = 18
-    local h = #icons + 3
-    local x = 1
-    local y = taskbarY - h
+    term.setCursorPos(1, dockY - 1)
+    term.setBackgroundColor(theme.desktopBg2)
+    term.clearLine()
 
-    ui.panel(x, y, w, h, "Start", { bg = theme.panelBg, fg = theme.text })
-    startMenuBoxes = {}
-    for i, icon in ipairs(icons) do
-        local row = y + i
-        term.setCursorPos(x + 2, row)
-        term.setBackgroundColor(theme.panelBg)
-        term.setTextColor(theme.text)
-        term.write(icon.label)
-        table.insert(startMenuBoxes, { x1 = x + 1, y1 = row, x2 = x + w - 2, y2 = row, icon = icon })
+    term.setCursorPos(1, dockY)
+    term.setBackgroundColor(dockBg)
+    term.clearLine()
+
+    local totalW = 0
+    for _, icon in ipairs(icons) do
+        totalW = totalW + math.max(6, #icon.label + 2) + 1
     end
 
-    local row = y + h - 2
-    term.setCursorPos(x + 2, row)
-    term.setTextColor(colors.red)
-    term.write("Shutdown")
-    table.insert(startMenuBoxes, { x1 = x + 1, y1 = row, x2 = x + w - 2, y2 = row, action = "shutdown" })
+    local x = math.max(2, math.floor((screenW - totalW) / 2))
+    dockBoxes = {}
 
-    row = row + 1
-    term.setCursorPos(x + 2, row)
-    term.setTextColor(colors.orange)
-    term.write("Reboot")
-    table.insert(startMenuBoxes, { x1 = x + 1, y1 = row, x2 = x + w - 2, y2 = row, action = "reboot" })
+    for _, icon in ipairs(icons) do
+        local buttonW = math.max(6, #icon.label + 2)
+        local running = false
+        local focused = false
+        for _, win in ipairs(wm.windows) do
+            if win.program == icon.program then
+                running = true
+                if win.id == wm.focusedId then focused = true end
+            end
+        end
+
+        term.setCursorPos(x, dockY)
+        term.setBackgroundColor(focused and theme.accent or dockBg)
+        term.setTextColor(focused and colors.black or theme.text)
+        term.write(" " .. icon.label:sub(1, buttonW - 2):gsub("%s+$", "") .. string.rep(" ", math.max(0, buttonW - #icon.label - 1)))
+
+        if running then
+            term.setCursorPos(x + math.floor(buttonW / 2), dockY - 1)
+            term.setBackgroundColor(theme.desktopBg2)
+            term.setTextColor(theme.ok)
+            term.write(".")
+        end
+
+        table.insert(dockBoxes, { x1 = x, y1 = dockY, x2 = x + buttonW - 1, y2 = dockY, icon = icon })
+        x = x + buttonW + 1
+    end
+end
+
+local function drawAppleMenu()
+    if not appleMenuOpen then return end
+
+    local items = {
+        { label = "About AetherOS", action = "about" },
+        { sep = true },
+        { label = "Files", icon = icons[2] },
+        { label = "Settings", icon = icons[5] },
+        { label = "Task Manager", icon = icons[6] },
+        { sep = true },
+        { label = "Reboot", action = "reboot" },
+        { label = "Shutdown", action = "shutdown" },
+    }
+
+    local x, y, w = 1, 2, 22
+    local h = #items + 2
+    ui.panel(x, y, w, h, nil, { bg = theme.panelBg, fg = theme.text })
+
+    appleMenuBoxes = {}
+    for i, item in ipairs(items) do
+        local row = y + i
+        term.setCursorPos(x + 1, row)
+        term.setBackgroundColor(theme.panelBg)
+        if item.sep then
+            term.setTextColor(theme.textDim)
+            term.write(string.rep("-", w - 2))
+        else
+            term.setTextColor(theme.text)
+            term.write(" " .. item.label .. string.rep(" ", math.max(0, w - 3 - #item.label)))
+            table.insert(appleMenuBoxes, { x1 = x + 1, y1 = row, x2 = x + w - 2, y2 = row, icon = item.icon, action = item.action })
+        end
+    end
 end
 
 local function launch(icon)
@@ -148,10 +169,10 @@ end
 
 local function redrawAll()
     drawWallpaper()
-    drawIcons()
     wm.compositeAll()
-    drawTaskbar()
-    drawStartMenu()
+    drawMenuBar()
+    drawDock()
+    drawAppleMenu()
 end
 
 redrawAll()
@@ -165,9 +186,9 @@ local function onEvent(event)
     if kind == "mouse_click" then
         local mx, my = event[3], event[4]
 
-        if startMenuOpen then
-            local hit = ui.hitAny(startMenuBoxes, mx, my)
-            startMenuOpen = false
+        if appleMenuOpen then
+            local hit = ui.hitAny(appleMenuBoxes, mx, my)
+            appleMenuOpen = false
             if hit then
                 if hit.icon then
                     launch(hit.icon)
@@ -175,37 +196,41 @@ local function onEvent(event)
                     os.shutdown()
                 elseif hit.action == "reboot" then
                     os.reboot()
+                elseif hit.action == "about" then
+                    wm.spawnWindow("/bin/neofetch.lua", {}, { title = "About AetherOS", w = 42, h = 16 })
                 end
             end
             changed = true
-        elseif my == taskbarY then
-            if mx <= 10 then
-                startMenuOpen = true
+        elseif my == menuBarY then
+            if mx <= 8 then
+                appleMenuOpen = true
                 changed = true
-            else
-                for _, b in ipairs(windowButtons()) do
-                    if ui.hit(b, mx, my) then
-                        wm.focus(b.win.id)
-                        changed = true
+            end
+        elseif my == dockY then
+            local hit = ui.hitAny(dockBoxes, mx, my)
+            if hit then
+                local focusedExisting = nil
+                for _, win in ipairs(wm.windows) do
+                    if win.program == hit.icon.program then
+                        focusedExisting = win
                     end
                 end
+                if focusedExisting then
+                    wm.focus(focusedExisting.id)
+                else
+                    launch(hit.icon)
+                end
+                changed = true
             end
         else
             local windowHandled = wm.handleEvent(event)
-            if windowHandled then
-                changed = true
-            else
-                local hit = ui.hitAny(iconHitboxes(), mx, my)
-                if hit then
-                    launch(hit.icon)
-                    changed = true
-                end
-            end
+            changed = windowHandled or changed
         end
     elseif kind == "term_resize" then
         screenW, screenH = term.getSize()
-        taskbarY = screenH
+        dockY = screenH
         wm.screenW, wm.screenH = screenW, screenH
+        wm.reflow()
         changed = true
     else
         changed = wm.handleEvent(event) or changed
