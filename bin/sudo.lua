@@ -35,8 +35,12 @@ local candidates = {
     "/sbin/" .. cmd .. ".lua",
     "/" .. cmd .. ".lua",
     "/apps/" .. cmd .. ".lua",
+    "/bin/" .. cmd .. ".lua",
     "/rom/programs/" .. cmd .. ".lua",
 }
+-- CraftOS's own lookup as a last resort (wget/pastebin live in
+-- /rom/programs/http, and aliases like dir/copy/delete resolve here too).
+candidates[#candidates + 1] = shell.resolveProgram(cmd)
 
 for _, path in ipairs(candidates) do
     if fs.exists(path) and not fs.isDir(path) then

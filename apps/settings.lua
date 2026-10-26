@@ -64,6 +64,8 @@ local function draw()
         by = by + 2
         local checkOnBoot = config.get("updateCheckOnBoot")
         table.insert(actionButtons, ui.toggle(2, by, checkOnBoot, "Check for updates on boot", { id = "toggleupdate" }))
+        by = by + 2
+        table.insert(actionButtons, ui.toggle(2, by, config.get("startupSound"), "Startup sound", { id = "togglesound" }))
     end
 
     ui.fillRect(1, h, w, 1, theme.panelBg2)
@@ -109,6 +111,8 @@ while true do
                     end
                 elseif hit.id == "toggleupdate" then
                     config.set("updateCheckOnBoot", not config.get("updateCheckOnBoot"))
+                elseif hit.id == "togglesound" then
+                    config.set("startupSound", not config.get("startupSound"))
                 end
             end
         end

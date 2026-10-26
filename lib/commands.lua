@@ -18,6 +18,7 @@ return {
     { name = "edit", usage = "edit <file>", desc = "Open the AetherOS text editor." },
     { name = "ps", usage = "ps", desc = "List running AetherOS processes." },
     { name = "kill", usage = "kill <pid>", desc = "Terminate a process by PID." },
+    { name = "panic", usage = "panic [reason]", desc = "Trigger a kernel panic screen (testing)." },
     { name = "df", usage = "df", desc = "Show disk space usage." },
     { name = "date", usage = "date", desc = "Show the current in-game date and time." },
     { name = "whoami", usage = "whoami", desc = "Print the current username." },

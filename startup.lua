@@ -2,6 +2,68 @@
 -- Copyright (c) 2026 Pancakse
 -- SPDX-License-Identifier: BSD-3-Clause
 
+-- ---------------------------------------------------------------------
+-- Secure boot (CCSecureBoot). pxboot only verifies THIS file, so it has
+-- to vouch for everything else: /boot.sums lists a SHA-256 for every
+-- system file and is itself signed (/boot.sums.sig). Nothing below this
+-- block runs unless the signature and every hash check out. If the
+-- computer isn't enrolled in secure boot this whole block is skipped.
+-- ---------------------------------------------------------------------
+do
+    if fs.exists("/rom/pxboot/certs/enrolled/" .. os.computerID()) then
+        local function halt(msg)
+            term.setBackgroundColor(colors.black)
+            term.setTextColor(colors.red)
+            print("SECURE BOOT: " .. msg)
+            term.setTextColor(colors.white)
+            print("Boot halted. Insert the key disk and reboot to use the boot menu.")
+            while true do os.pullEventRaw() end
+        end
+
+        -- Always load codesign from ROM with dofile, never via require.
+        local codesign = dofile("/rom/modules/main/codesign.lua")
+
+        local okSig, sigErr = codesign.verify("/boot.sums")
+        if not okSig then halt("/boot.sums is not validly signed: " .. tostring(sigErr)) end
+
+        -- Only look in ROM for the hash library so a local file can't shadow it.
+        local savedPath = package.path
+        package.path = "/rom/modules/main/?.lua;/rom/modules/main/?/init.lua"
+        local sha256 = require("ccryptolib.sha256")
+        package.path = savedPath
+
+        local function hex(s)
+            return (s:gsub(".", function(c) return ("%02x"):format(c:byte()) end))
+        end
+
+        local list = fs.open("/boot.sums", "r")
+        local entries = {}
+        for line in list.readAll():gmatch("[^\r\n]+") do
+            local sum, path = line:match("^(%x+)  (.+)$")
+            if sum then entries[#entries + 1] = { sum = sum, path = path } end
+        end
+        list.close()
+        if #entries == 0 then halt("/boot.sums is empty") end
+
+        term.setTextColor(colors.lightGray)
+        local _, row = term.getCursorPos()
+        for i, e in ipairs(entries) do
+            term.setCursorPos(1, row)
+            term.clearLine()
+            term.write(("Verifying system files %d/%d"):format(i, #entries))
+            local f = fs.open("/" .. e.path, "rb")
+            if not f then halt("missing file: " .. e.path) end
+            local data = f.readAll()
+            f.close()
+            if hex(sha256.digest(data)) ~= e.sum then halt("file was modified: " .. e.path) end
+            sleep(0) -- yield so a big file can't trip the "too long without yielding" timeout
+        end
+        print("")
+        term.setTextColor(colors.white)
+    end
+end
+
+
 local bootPath = "boot/init.lua"
 
 local function read_boot_mode()

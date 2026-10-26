@@ -12,6 +12,17 @@
 -- or point the computer's startup at it temporarily, e.g:
 --   > recovery
 
+-- Secure boot: on an enrolled computer the recovery shell (safeshell,
+-- /shell.lua) would be a way around secure boot, so it needs the key disk.
+if fs.exists("/rom/pxboot/certs/enrolled/" .. os.computerID()) then
+    local codesign = dofile("/rom/modules/main/codesign.lua")
+    local ok = fs.exists("/disk/pxboot_config.lua") and codesign.verify("/disk/pxboot_config.lua")
+    if not ok then
+        printError("Secure boot is on: recovery needs the key disk.")
+        return
+    end
+end
+
 local W, H = term.getSize()
 
 local function header()

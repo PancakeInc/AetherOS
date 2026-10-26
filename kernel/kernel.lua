@@ -108,9 +108,26 @@ end
 -- Main loop. `onEvent(event)` is called after system processes are
 -- dispatched for every event (used by the window manager / shell to
 -- handle its own input). Returning false from onEvent stops the kernel.
+--
+-- Ctrl+C: CC has no such event (only separate key events for Ctrl and C),
+-- so the kernel watches the keys itself. While the shell is running a
+-- command (aether.foreground), Ctrl+C is turned into a "terminate" event,
+-- exactly like Ctrl+T, which ends that command. At the prompt it does
+-- nothing, so it can't kill the shell itself.
 function Kernel:run(onEvent)
+    local ctrlDown = false
     while self.running do
         local event = { os.pullEventRaw() }
+
+        if event[1] == "key" or event[1] == "key_up" then
+            local code, isDown = event[2], (event[1] == "key")
+            if code == keys.leftCtrl or code == keys.rightCtrl then
+                ctrlDown = isDown
+            elseif isDown and ctrlDown and code == keys.c and not event[3]
+                and _G.aether and _G.aether.foreground then
+                event = { "terminate" } -- event[3] is "held": ignore key repeat
+            end
+        end
 
         for _, proc in ipairs(self.processes) do
             if proc.kind == "system" and proc.status == "running" then

@@ -210,6 +210,14 @@ else
     bootLine(false, "No advanced computer/monitor - starting terminal shell")
 end
 
+if aether.config.get("startupSound") then
+    local audioOk, audio = pcall(dofile, "/lib/audio.lua")
+    if audioOk then
+        local targets = audio.select()
+        if targets then pcall(audio.chime, targets) end
+    end
+end
+
 print("")
 print("This build runs in terminal-only mode.")
 print("Type 'help' for available commands.")

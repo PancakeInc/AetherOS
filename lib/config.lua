@@ -15,6 +15,7 @@ local defaults = {
     sudoPassword = "",
     userPasswords = {},
     updateCheckOnBoot = false,
+    startupSound = true,
     version = "1.0.0",
 }
 

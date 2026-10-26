@@ -40,6 +40,7 @@ bin/help.lua
 bin/man.lua
 bin/ps.lua
 bin/kill.lua
+bin/panic.lua
 bin/history.lua
 bin/date.lua
 bin/whoami.lua
